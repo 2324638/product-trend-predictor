@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  trend-predictor:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models/saved:/app/models/saved
+      - ./logs:/app/logs
+      - ./evaluation_results:/app/evaluation_results
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Add database service
+  # postgres:
+  #   image: postgres:13
+  #   environment:
+  #     POSTGRES_DB: trend_predictor
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+# volumes:
+#   postgres_data:
