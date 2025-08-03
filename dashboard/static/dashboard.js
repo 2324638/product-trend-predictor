@@ -150,28 +150,66 @@ async function loadDashboardData() {
             if (quickMetrics.dataset_available) {
                 // Show basic metrics immediately
                 updateMetrics(quickMetrics);
-                hideLoading(); // Hide main loading
-                showLoading('Loading charts and analytics...', 4000); // Show background loading
+                hideLoading(); // Hide main loading - no secondary popup!
+                console.log('Quick metrics loaded, preparing data tables...');
             }
         } catch (e) {
             console.log('Quick metrics failed, continuing with full load');
         }
         
-        // Load overview data
-        const overview = await apiCall('/analytics/overview');
-        currentData.overview = overview;
+        // Try to load overview data, but don't block if it fails
+        let overview = null;
+        try {
+            overview = await apiCall('/analytics/overview');
+            currentData.overview = overview;
+            
+            // Update metrics immediately
+            updateMetrics(overview.summary);
+        } catch (e) {
+            console.error('Analytics overview failed:', e);
+            // Keep the quick metrics that were already loaded
+            showError('Advanced analytics unavailable. Basic metrics are still shown.', 4000);
+        }
         
-        // Update metrics immediately
-        updateMetrics(overview.summary);
         hideLoading(); // Hide loading after metrics are shown
         
-        // Load charts in background without blocking UI
+        // Skip charts entirely for now - display data in simple tables
         setTimeout(() => {
             try {
-                createSalesChart(overview.daily_trends);
-                createCategoryChart(overview.category_performance);
+                if (overview) {
+                    console.log('Creating simple data displays instead of charts...');
+                    
+                    // Show sales trends in a simple table
+                    createSimpleSalesTable(overview.daily_trends || []);
+                    
+                    // Show category performance in a simple list
+                    createSimpleCategoryList(overview.category_performance || {});
+                    
+                    console.log('Simple data displays created successfully');
+                }
+                
+                // Force hide any remaining loading popups
+                hideLoading();
+                
+                // Clear any loading timeouts that might be running
+                if (loadingTimeoutId) {
+                    clearTimeout(loadingTimeoutId);
+                    loadingTimeoutId = null;
+                }
+                
+                showSuccess('Dashboard loaded successfully! Charts temporarily disabled for better performance.', 3000);
             } catch (e) {
-                console.error('Chart creation failed:', e);
+                // Force hide any remaining loading popups
+                hideLoading();
+                
+                // Clear any loading timeouts that might be running
+                if (loadingTimeoutId) {
+                    clearTimeout(loadingTimeoutId);
+                    loadingTimeoutId = null;
+                }
+                
+                console.error('Simple display creation failed:', e);
+                showError('Data display failed, but dashboard is ready to use.', 3000);
             }
         }, 100);
         
@@ -1078,9 +1116,28 @@ function hideLoading() {
         loadingTimeoutId = null;
     }
     
-    const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
-    if (modal) {
-        modal.hide();
+    // Force hide loading modal - multiple attempts to handle stuck modals
+    const loadingModal = document.getElementById('loadingModal');
+    if (loadingModal) {
+        const modal = bootstrap.Modal.getInstance(loadingModal);
+        if (modal) {
+            modal.hide();
+        }
+        
+        // Force remove backdrop and modal classes if still showing
+        setTimeout(() => {
+            loadingModal.classList.remove('show');
+            loadingModal.style.display = 'none';
+            
+            // Remove any leftover backdrops
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+            
+            // Remove modal-open class from body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }, 100);
     }
 }
 
@@ -1103,7 +1160,7 @@ function hideElementLoading(elementId) {
     }
 }
 
-function showError(message) {
+function showError(message, autoHideMs = null) {
     // Create and show error toast
     const toast = document.createElement('div');
     toast.className = 'toast align-items-center text-white bg-danger border-0 position-fixed top-0 end-0 m-3';
@@ -1118,8 +1175,18 @@ function showError(message) {
     `;
     
     document.body.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
+    
+    // Configure toast options
+    const toastOptions = autoHideMs ? { delay: autoHideMs } : {};
+    const bsToast = new bootstrap.Toast(toast, toastOptions);
     bsToast.show();
+    
+    // Auto-hide if specified
+    if (autoHideMs) {
+        setTimeout(() => {
+            bsToast.hide();
+        }, autoHideMs);
+    }
     
     // Remove from DOM after hiding
     toast.addEventListener('hidden.bs.toast', () => {
@@ -1127,7 +1194,7 @@ function showError(message) {
     });
 }
 
-function showSuccess(message) {
+function showSuccess(message, autoHideMs = null) {
     // Create and show success toast
     const toast = document.createElement('div');
     toast.className = 'toast align-items-center text-white bg-success border-0 position-fixed top-0 end-0 m-3';
@@ -1142,13 +1209,106 @@ function showSuccess(message) {
     `;
     
     document.body.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
+    
+    // Configure toast options
+    const toastOptions = autoHideMs ? { delay: autoHideMs } : {};
+    const bsToast = new bootstrap.Toast(toast, toastOptions);
     bsToast.show();
+    
+    // Auto-hide if specified
+    if (autoHideMs) {
+        setTimeout(() => {
+            bsToast.hide();
+        }, autoHideMs);
+    }
     
     // Remove from DOM after hiding
     toast.addEventListener('hidden.bs.toast', () => {
         toast.remove();
     });
+}
+
+// Simple chart replacements that load instantly
+function createSimpleSalesTable(dailyTrends) {
+    const salesChartContainer = document.getElementById('sales-chart');
+    if (!salesChartContainer || !dailyTrends || dailyTrends.length === 0) {
+        return;
+    }
+    
+    // Take last 7 days only
+    const recentTrends = dailyTrends.slice(-7);
+    
+    salesChartContainer.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Recent Sales Trends (Last 7 Days)</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Sales Quantity</th>
+                                <th>Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${recentTrends.map(item => `
+                                <tr>
+                                    <td>${new Date(item.date).toLocaleDateString()}</td>
+                                    <td>${formatNumber(item.quantity_sold)}</td>
+                                    <td>${formatCurrency(item.revenue)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Charts temporarily disabled for better performance. Data is displayed in table format.
+                </small>
+            </div>
+        </div>
+    `;
+}
+
+function createSimpleCategoryList(categoryPerformance) {
+    const categoryChartContainer = document.getElementById('category-chart');
+    if (!categoryChartContainer || !categoryPerformance) {
+        return;
+    }
+    
+    const categories = Object.entries(categoryPerformance).slice(0, 5);
+    
+    categoryChartContainer.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Top Category Performance</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    ${categories.map(([category, data], index) => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${category}</h6>
+                                <small class="text-muted">Sales: ${formatNumber(data.quantity_sold)}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary rounded-pill">${formatCurrency(data.revenue)}</span>
+                                <br>
+                                <small class="text-muted">#${index + 1}</small>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Charts temporarily disabled for better performance. Data is displayed in list format.
+                </small>
+            </div>
+        </div>
+    `;
 }
 
 // Global functions for onclick handlers
