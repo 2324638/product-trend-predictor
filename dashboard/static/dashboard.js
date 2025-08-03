@@ -139,29 +139,57 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-// Dashboard data loading
+// Dashboard data loading - optimized for faster UX
 async function loadDashboardData() {
     try {
         showLoading('Loading dashboard data...');
+        
+        // First, load basic metrics super fast
+        try {
+            const quickMetrics = await apiCall('/metrics/quick');
+            if (quickMetrics.dataset_available) {
+                // Show basic metrics immediately
+                updateMetrics(quickMetrics);
+                hideLoading(); // Hide main loading
+                showLoading('Loading charts and analytics...', 4000); // Show background loading
+            }
+        } catch (e) {
+            console.log('Quick metrics failed, continuing with full load');
+        }
         
         // Load overview data
         const overview = await apiCall('/analytics/overview');
         currentData.overview = overview;
         
-        // Update metrics
+        // Update metrics immediately
         updateMetrics(overview.summary);
+        hideLoading(); // Hide loading after metrics are shown
         
-        // Create charts
-        createSalesChart(overview.daily_trends);
-        createCategoryChart(overview.category_performance);
+        // Load charts in background without blocking UI
+        setTimeout(() => {
+            try {
+                createSalesChart(overview.daily_trends);
+                createCategoryChart(overview.category_performance);
+            } catch (e) {
+                console.error('Chart creation failed:', e);
+            }
+        }, 100);
         
-        // Load recent alerts
-        await loadRecentAlerts();
+        // Load alerts in background
+        setTimeout(() => {
+            loadRecentAlerts().catch(e => console.error('Alerts failed:', e));
+        }, 200);
         
-        hideLoading();
     } catch (error) {
         hideLoading();
-        showError('Failed to load dashboard data');
+        showError('Failed to load dashboard data: ' + error.message);
+        // Show basic fallback data
+        updateMetrics({
+            total_products: '-',
+            total_sales: '-', 
+            total_revenue: '-',
+            avg_order_value: '-'
+        });
     }
 }
 
@@ -1010,15 +1038,46 @@ function getSeverityColor(severity) {
 }
 
 // Loading and error handling
+let loadingTimeoutId = null;
+
 function showLoading(text = 'Loading...', details = 'Please wait while we process your request.') {
+    // Clear any existing timeout
+    if (loadingTimeoutId) {
+        clearTimeout(loadingTimeoutId);
+        loadingTimeoutId = null;
+    }
+    
+    // If details is a number, treat it as timeout milliseconds
+    let timeoutMs = null;
+    let detailsText = details;
+    
+    if (typeof details === 'number') {
+        timeoutMs = details;
+        detailsText = 'Please wait while we process your request.';
+    }
+    
     document.getElementById('loading-text').textContent = text;
-    document.getElementById('loading-details').textContent = details;
+    document.getElementById('loading-details').textContent = detailsText;
     
     const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
     modal.show();
+    
+    // Auto-hide after timeout if specified
+    if (timeoutMs) {
+        loadingTimeoutId = setTimeout(() => {
+            hideLoading();
+            loadingTimeoutId = null;
+        }, timeoutMs);
+    }
 }
 
 function hideLoading() {
+    // Clear any pending timeout
+    if (loadingTimeoutId) {
+        clearTimeout(loadingTimeoutId);
+        loadingTimeoutId = null;
+    }
+    
     const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
     if (modal) {
         modal.hide();

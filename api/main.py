@@ -96,6 +96,30 @@ async def health_check():
     }
 
 
+@app.get("/metrics/quick")
+async def get_quick_metrics():
+    """Get basic metrics quickly for dashboard"""
+    if current_dataset is None:
+        return {
+            "total_products": 0,
+            "total_sales": 0,
+            "total_revenue": 0.0,
+            "avg_order_value": 0.0,
+            "dataset_available": False
+        }
+    
+    df = current_dataset
+    
+    # Calculate just the essential metrics quickly
+    return {
+        "total_products": int(df['product_id'].nunique()),
+        "total_sales": int(df['quantity_sold'].sum()),
+        "total_revenue": float(df['revenue'].sum()),
+        "avg_order_value": float(df['revenue'].sum() / df['quantity_sold'].sum()),
+        "dataset_available": True
+    }
+
+
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_product_trend(request: PredictionRequest):
     """Predict trends for a specific product"""
@@ -179,7 +203,7 @@ async def get_products():
 
 @app.get("/analytics/overview")
 async def get_analytics_overview():
-    """Get overall analytics overview"""
+    """Get overall analytics overview - optimized for dashboard"""
     if current_dataset is None:
         raise HTTPException(status_code=400, detail="No dataset available")
     
@@ -191,23 +215,25 @@ async def get_analytics_overview():
     total_revenue = float(df['revenue'].sum())
     avg_order_value = float(df['revenue'].sum() / df['quantity_sold'].sum())
     
-    # Category analysis
+    # Category analysis - top 10 only
     category_stats = df.groupby('category').agg({
         'quantity_sold': 'sum',
         'revenue': 'sum'
-    }).sort_values('revenue', ascending=False)
+    }).sort_values('revenue', ascending=False).head(10)
     
-    # Brand analysis
+    # Brand analysis - top 10 only
     brand_stats = df.groupby('brand').agg({
         'quantity_sold': 'sum',
         'revenue': 'sum'
-    }).sort_values('revenue', ascending=False)
+    }).sort_values('revenue', ascending=False).head(10)
     
-    # Time series aggregation
-    daily_stats = df.groupby('date').agg({
+    # Time series aggregation - last 30 days only for performance
+    recent_cutoff = df['date'].max() - pd.Timedelta(days=30)
+    recent_df = df[df['date'] >= recent_cutoff]
+    daily_stats = recent_df.groupby('date').agg({
         'quantity_sold': 'sum',
         'revenue': 'sum'
-    }).reset_index()
+    }).reset_index().sort_values('date')
     
     return {
         "summary": {

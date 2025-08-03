@@ -27,7 +27,7 @@ class EcommerceDataGenerator:
             'Food': {'base_price': 25, 'price_std': 15, 'seasonality': 0.8}
         }
         
-        self.brands = ['BrandA', 'BrandB', 'BrandC', 'BrandD', 'BrandE', 'BrandF', 'BrandG']
+        self.brands = ['BrandA', 'BrandB', 'BrandC']
         self.channels = ['online', 'store', 'mobile']
         
     def generate_products(self, n_products: int = 100) -> List[ProductData]:

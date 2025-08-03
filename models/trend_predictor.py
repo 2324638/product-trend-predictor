@@ -11,11 +11,20 @@ from sklearn.model_selection import train_test_split, TimeSeriesSplit
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
 import lightgbm as lgb
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.utils import plot_model
+
+# Optional TensorFlow import
+try:
+    from tensorflow.keras.models import Sequential, load_model
+    from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
+    from tensorflow.keras.optimizers import Adam
+    from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+    from tensorflow.keras.utils import plot_model
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    print("⚠️  TensorFlow not available. LSTM models will be disabled.")
+    print("   Install TensorFlow with: pip install tensorflow")
+    Sequential = None
 
 # Local imports
 from data.preprocessor import TrendDataPreprocessor
@@ -30,6 +39,7 @@ class LSTMPredictor:
         self.lstm_units = lstm_units
         self.model = None
         self.scaler = None
+        self.available = TENSORFLOW_AVAILABLE
         
     def create_sequences(self, data: np.ndarray, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Create sequences for LSTM training"""
@@ -62,6 +72,9 @@ class LSTMPredictor:
     
     def fit(self, X: pd.DataFrame, y: pd.Series) -> 'LSTMPredictor':
         """Train the LSTM model"""
+        if not self.available:
+            raise ImportError("TensorFlow not available. Cannot train LSTM model.")
+        
         # Prepare data for LSTM
         X_seq, y_seq = self.create_sequences(X.values, y.values)
         
@@ -131,8 +144,12 @@ class TrendPredictor:
         self.xgb_model = None
         self.lgb_model = None
         
-        # Ensemble weights
-        self.ensemble_weights = {'lstm': 0.4, 'xgb': 0.35, 'lgb': 0.25}
+        # Ensemble weights - adjust if TensorFlow is not available
+        if TENSORFLOW_AVAILABLE:
+            self.ensemble_weights = {'lstm': 0.4, 'xgb': 0.35, 'lgb': 0.25}
+        else:
+            self.ensemble_weights = {'lstm': 0.0, 'xgb': 0.6, 'lgb': 0.4}
+            print("⚠️  TensorFlow not available. Using XGBoost + LightGBM ensemble only.")
         
         # Model metrics
         self.model_metrics = {}
@@ -241,15 +258,19 @@ class TrendPredictor:
         lgb_metrics = self._evaluate_model(self.lgb_model, 'lightgbm', X_test, y_test)
         self.model_metrics['lightgbm'] = lgb_metrics
         
-        print("Training LSTM...")
-        try:
-            self.lstm_model.fit(X_train, y_train)
-            lstm_metrics = self._evaluate_model(self.lstm_model, 'lstm', X_test, y_test)
-            self.model_metrics['lstm'] = lstm_metrics
-        except Exception as e:
-            print(f"LSTM training failed: {e}")
-            # Adjust ensemble weights if LSTM fails
-            self.ensemble_weights = {'lstm': 0.0, 'xgb': 0.6, 'lgb': 0.4}
+        # Train LSTM only if TensorFlow is available
+        if TENSORFLOW_AVAILABLE and self.ensemble_weights['lstm'] > 0:
+            print("Training LSTM...")
+            try:
+                self.lstm_model.fit(X_train, y_train)
+                lstm_metrics = self._evaluate_model(self.lstm_model, 'lstm', X_test, y_test)
+                self.model_metrics['lstm'] = lstm_metrics
+            except Exception as e:
+                print(f"LSTM training failed: {e}")
+                # Adjust ensemble weights if LSTM fails
+                self.ensemble_weights = {'lstm': 0.0, 'xgb': 0.6, 'lgb': 0.4}
+        else:
+            print("Skipping LSTM training (TensorFlow not available)")
         
         self.is_trained = True
         
