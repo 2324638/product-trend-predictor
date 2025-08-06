@@ -189,7 +189,11 @@ class TrendDataPreprocessor:
             keyword in col.lower() for keyword in ['lag', 'rolling', 'momentum', 'pct_change']
         )]
         for col in time_series_cols:
-            df[col] = df.groupby('product_id')[col].fillna(method='ffill')
+            if df[col].isnull().sum() > 0:
+                # Use newer pandas method
+                df[col] = df.groupby('product_id')[col].ffill()
+                # Fill any remaining NaN with 0 for lag features
+                df[col] = df[col].fillna(0)
         
         # Fill numerical columns with median
         numerical_cols = df.select_dtypes(include=[np.number]).columns
@@ -202,6 +206,12 @@ class TrendDataPreprocessor:
         for col in categorical_cols:
             if df[col].isnull().sum() > 0:
                 df[col].fillna(df[col].mode()[0] if len(df[col].mode()) > 0 else 'unknown', inplace=True)
+        
+        # Final check - fill any remaining NaN with 0 for numerical columns
+        numerical_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numerical_cols:
+            if df[col].isnull().sum() > 0:
+                df[col].fillna(0, inplace=True)
         
         return df
     
@@ -250,9 +260,13 @@ class TrendDataPreprocessor:
         # Handle missing values
         df = self.handle_missing_values(df)
         
-        # Prepare features and target
-        feature_cols = [col for col in df.columns if col not in 
-                       ['date', 'product_id', target_col, 'name', 'category', 'brand', 'channel', 'season']]
+        # Prepare features and target - only include numerical columns
+        exclude_cols = ['date', 'product_id', target_col, 'category', 'brand', 'channel', 'season', 
+                       'sub_category', 'region', 'state', 'city', 'segment', 'ship_mode', 'customer_name', 'product_name']
+        
+        # Get only numerical columns for feature selection
+        numerical_cols = df.select_dtypes(include=[np.number]).columns
+        feature_cols = [col for col in numerical_cols if col not in exclude_cols]
         
         X = df[feature_cols].copy()
         y = df[target_col].copy()
