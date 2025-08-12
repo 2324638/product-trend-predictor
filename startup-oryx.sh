@@ -1,30 +1,36 @@
 #!/bin/bash
 
-# Azure App Service startup script for FastAPI application
-echo "🚀 Starting AI Product Trend Predictor on Azure..."
+# Azure Oryx Build System Startup Script
+echo "🚀 Starting AI Product Trend Predictor on Azure Oryx..."
 echo "📅 Timestamp: $(date)"
 echo "📁 Current directory: $(pwd)"
 echo "📂 Directory contents:"
 ls -la
 
-# Azure App Service specific paths - Oryx build system
-AZURE_WWWROOT="/home/site/wwwroot"
+# Azure Oryx specific paths
 AZURE_REPOSITORY="/home/site/repository"
+AZURE_WWWROOT="/home/site/wwwroot"
 CURRENT_DIR=$(pwd)
 
-# Try to find the correct working directory for Oryx builds
-if [ -d "$AZURE_REPOSITORY" ]; then
-    echo "✅ Found Azure repository directory (Oryx build): $AZURE_REPOSITORY"
-    cd "$AZURE_REPOSITORY"
-elif [ -d "$AZURE_WWWROOT" ]; then
-    echo "✅ Found Azure wwwroot directory: $AZURE_WWWROOT"
-    cd "$AZURE_WWWROOT"
-elif [ -d "/tmp/zipdeploy/extracted" ]; then
-    echo "✅ Found extracted deployment directory: /tmp/zipdeploy/extracted"
-    cd "/tmp/zipdeploy/extracted"
-else
-    echo "⚠️  Using current directory as fallback: $CURRENT_DIR"
-fi
+echo "🔍 Searching for Python files in all possible locations..."
+
+# Check all possible Azure paths
+for path in "$AZURE_REPOSITORY" "$AZURE_WWWROOT" "$CURRENT_DIR" "/tmp/zipdeploy/extracted"; do
+    if [ -d "$path" ]; then
+        echo "📂 Checking path: $path"
+        if [ -f "$path/main.py" ]; then
+            echo "✅ Found main.py in: $path"
+            cd "$path"
+            break
+        elif [ -f "$path/app.py" ]; then
+            echo "✅ Found app.py in: $path"
+            cd "$path"
+            break
+        else
+            echo "❌ No main.py or app.py found in: $path"
+        fi
+    fi
+done
 
 # Display current directory and contents
 echo "📁 Working directory: $(pwd)"
@@ -61,6 +67,17 @@ else
     find . -name "*.py" -type f | head -10
     echo "📂 Directory structure:"
     find . -type d -maxdepth 3 | head -15
+    
+    # Try to find Python files in parent directories
+    echo "🔍 Searching parent directories..."
+    for i in {1..3}; do
+        parent_path=$(printf '../%.0s' $(seq 1 $i))
+        if [ -d "$parent_path" ]; then
+            echo "📂 Parent directory $i: $parent_path"
+            find "$parent_path" -name "*.py" -type f | head -5
+        fi
+    done
+    
     exit 1
 fi
 
