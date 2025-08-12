@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Azure App Service Startup Script - Fixed for Port Conflicts
+# Simple Azure App Service Startup Script
 echo "🚀 Starting AI Product Trend Predictor on Azure..."
 echo "📅 Timestamp: $(date)"
 echo "📁 Current directory: $(pwd)"
@@ -96,46 +96,17 @@ fi
 
 echo "🚀 Using port: $APP_PORT"
 
-# Start the application with proper Azure configuration
+# Start the application with simple Python execution
 echo "🌐 Starting FastAPI application..."
 echo "🔧 Entry point: $ENTRY_POINT"
 echo "🐍 Python path: $PYTHONPATH"
 
-# Use gunicorn for production deployment with Azure-specific settings
-if command -v gunicorn &> /dev/null; then
-    echo "🚀 Using gunicorn for Azure production deployment..."
-    echo "🔧 Binding to: 0.0.0.0:$APP_PORT"
-    
-    # Get the module name without .py extension
-    MODULE_NAME=$(basename "$ENTRY_POINT" .py)
-    echo "🔧 Module name: $MODULE_NAME"
-    
-    # Azure App Service specific gunicorn configuration
-    exec gunicorn \
-        --bind 0.0.0.0:$APP_PORT \
-        --workers 1 \
-        --timeout 120 \
-        --keep-alive 2 \
-        --max-requests 1000 \
-        --max-requests-jitter 100 \
-        --preload \
-        --access-logfile - \
-        --error-logfile - \
-        --log-level info \
-        "$MODULE_NAME:app"
-else
-    echo "🚀 Using uvicorn for development deployment..."
-    echo "🔧 Binding to: 0.0.0.0:$APP_PORT"
-    
-    # Get the module name without .py extension
-    MODULE_NAME=$(basename "$ENTRY_POINT" .py)
-    echo "🔧 Module name: $MODULE_NAME"
-    
-    # Use uvicorn with Azure-specific settings
-    exec python -m uvicorn \
-        "$MODULE_NAME:app" \
-        --host 0.0.0.0 \
-        --port $APP_PORT \
-        --log-level info \
-        --access-log
-fi 
+# Simple approach: just run the Python file directly
+echo "🚀 Starting with Python directly..."
+echo "🔧 Running: python $ENTRY_POINT"
+
+# Set the port environment variable for the Python app
+export PORT="$APP_PORT"
+
+# Run the Python application directly
+exec python "$ENTRY_POINT" 
