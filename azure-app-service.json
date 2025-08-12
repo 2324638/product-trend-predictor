@@ -1,0 +1,35 @@
+{
+  "name": "ai-product-trend-predictor",
+  "type": "Microsoft.Web/sites",
+  "apiVersion": "2021-02-01",
+  "location": "[resourceGroup().location]",
+  "properties": {
+    "siteConfig": {
+      "linuxFxVersion": "PYTHON|3.11",
+      "appSettings": [
+        {
+          "name": "PYTHONPATH",
+          "value": "/home/site/wwwroot"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "PORT",
+          "value": "8000"
+        },
+        {
+          "name": "WEBSITES_PORT",
+          "value": "8000"
+        },
+        {
+          "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+          "value": "true"
+        }
+      ],
+      "startupCommand": "bash startup-azure.sh"
+    },
+    "httpsOnly": true
+  }
+} 
