@@ -50,13 +50,16 @@ def main():
     try:
         from api.main import app
         
+        # Get port from environment variables (Azure App Service)
+        port = int(os.environ.get("PORT", os.environ.get("WEBSITES_PORT", 8000)))
+        
         print("🌐 Starting Web Server...")
-        print("   Dashboard: http://localhost:8000")
-        print("   API Docs:  http://localhost:8000/docs")
-        print("   API Health: http://localhost:8000/health")
+        print(f"   Dashboard: http://0.0.0.0:{port}")
+        print(f"   API Docs:  http://0.0.0.0:{port}/docs")
+        print(f"   API Health: http://0.0.0.0:{port}/health")
         print()
         print("💡 Quick Start:")
-        print("   1. Open http://localhost:8000 in your browser")
+        print(f"   1. Open http://0.0.0.0:{port} in your browser")
         print("   2. Go to 'Data Management' tab")
         print("   3. Click 'Load Superstore Data' to load your dataset")
         print("   4. Click 'Train Model' to train the AI models")
@@ -69,7 +72,7 @@ def main():
         uvicorn.run(
             app,
             host="0.0.0.0",
-            port=8000,
+            port=port,
             log_level="info",
             access_log=True
         )

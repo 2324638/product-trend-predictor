@@ -44,14 +44,17 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
     
+    # Get port from environment variables (Azure App Service)
+    port = int(os.environ.get("PORT", os.environ.get("WEBSITES_PORT", 8000)))
+    
     print("🚀 Starting AI Product Trend Predictor for Azure...")
-    print("🌐 Server will be available at: http://localhost:8000")
+    print(f"🌐 Server will be available at: http://0.0.0.0:{port}")
     
     # Run the application
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8000)),
+        port=port,
         log_level="info",
         access_log=True
     ) 
