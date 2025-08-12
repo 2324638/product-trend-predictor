@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 import pandas as pd
+import numpy as np
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -299,6 +300,9 @@ async def train_model(background_tasks: BackgroundTasks):
     }
 
 
+
+
+
 @app.get("/model/status")
 async def get_model_status():
     """Get current model status and performance metrics"""
@@ -309,19 +313,57 @@ async def get_model_status():
         }
     
     try:
-        metrics = {}
-        if hasattr(trend_predictor, 'model_metrics'):
-            metrics = {name: metric.dict() for name, metric in trend_predictor.model_metrics.items()}
+        # Convert numpy types and datetime objects to native Python types for JSON serialization
+        def convert_numpy_types(obj):
+            """Recursively convert numpy types and datetime objects to native Python types"""
+            if isinstance(obj, dict):
+                return {k: convert_numpy_types(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [convert_numpy_types(item) for item in obj]
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif hasattr(obj, 'item'):  # numpy scalar
+                try:
+                    return obj.item()
+                except (ValueError, AttributeError):
+                    return float(obj)
+            elif isinstance(obj, (np.ndarray, np.generic)):
+                try:
+                    return obj.tolist() if hasattr(obj, 'tolist') else float(obj)
+                except (ValueError, TypeError):
+                    return str(obj)
+            elif isinstance(obj, (np.floating, np.integer)):
+                return float(obj)
+            elif hasattr(pd, 'isna') and pd.isna(obj):
+                return None
+            else:
+                return obj
         
-        feature_importance = trend_predictor.get_feature_importance()
-        
-        return {
+        # Get basic model info first
+        result = {
             "trained": True,
-            "ensemble_weights": trend_predictor.ensemble_weights,
-            "model_metrics": metrics,
-            "feature_importance": feature_importance,
-            "sequence_length": trend_predictor.sequence_length
+            "sequence_length": int(trend_predictor.sequence_length),
+            "ensemble_weights": convert_numpy_types(trend_predictor.ensemble_weights)
         }
+        
+        # Try to get model metrics
+        try:
+            if hasattr(trend_predictor, 'model_metrics'):
+                metrics = {name: metric.dict() for name, metric in trend_predictor.model_metrics.items()}
+                result["model_metrics"] = convert_numpy_types(metrics)
+            else:
+                result["model_metrics"] = {}
+        except Exception as e:
+            result["model_metrics_error"] = str(e)
+        
+        # Try to get feature importance
+        try:
+            feature_importance = trend_predictor.get_feature_importance()
+            result["feature_importance"] = convert_numpy_types(feature_importance)
+        except Exception as e:
+            result["feature_importance_error"] = str(e)
+        
+        return result
     except Exception as e:
         return {
             "trained": True,
