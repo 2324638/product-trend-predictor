@@ -3,8 +3,97 @@ let currentData = {};
 let charts = {};
 let currentTab = 'dashboard';
 
+// Pagination variables
+let currentPage = 1;
+let itemsPerPage = 10;
+let totalPages = 1;
+let filteredProducts = [];
+
 // API base URL
 const API_BASE = window.location.origin;
+
+// Global function to force close loading modal (can be called from HTML)
+function forceCloseLoading() {
+    console.log('forceCloseLoading called');
+    
+    // Get the modal element
+    const loadingModal = document.getElementById('loadingModal');
+    if (!loadingModal) {
+        console.error('Loading modal not found');
+        return;
+    }
+    
+    // Method 1: Try Bootstrap 5 modal API multiple times
+    try {
+        const modalInstance = bootstrap.Modal.getInstance(loadingModal);
+        if (modalInstance) {
+            console.log('Hiding modal via Bootstrap API');
+            modalInstance.hide();
+            
+            // Force hide again after a short delay
+            setTimeout(() => {
+                if (loadingModal.classList.contains('show')) {
+                    console.log('Bootstrap hide failed, forcing again');
+                    modalInstance.hide();
+                }
+            }, 50);
+        }
+    } catch (e) {
+        console.log('Bootstrap API failed:', e);
+    }
+    
+    // Method 2: Force hide with CSS and classes immediately
+    console.log('Force hiding modal with CSS');
+    loadingModal.style.display = 'none';
+    loadingModal.classList.remove('show', 'fade');
+    loadingModal.setAttribute('aria-hidden', 'true');
+    loadingModal.removeAttribute('aria-modal');
+    
+    // Method 3: Remove backdrop immediately
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(backdrop => {
+        console.log('Removing backdrop');
+        backdrop.remove();
+    });
+    
+    // Method 4: Clean up body immediately
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    // Method 5: Additional aggressive cleanup
+    setTimeout(() => {
+        if (loadingModal.classList.contains('show') || loadingModal.style.display !== 'none') {
+            console.log('Modal still visible, applying aggressive cleanup');
+            loadingModal.style.display = 'none';
+            loadingModal.classList.remove('show', 'fade');
+            loadingModal.style.zIndex = '-1';
+            
+            // Remove any remaining Bootstrap classes
+            loadingModal.className = loadingModal.className.replace(/modal.*?/g, '');
+        }
+    }, 100);
+    
+    console.log('Modal should now be hidden');
+}
+
+// Debug function to check modal state
+function debugModalState() {
+    const loadingModal = document.getElementById('loadingModal');
+    if (loadingModal) {
+        console.log('=== MODAL DEBUG INFO ===');
+        console.log('Modal element:', loadingModal);
+        console.log('Display style:', loadingModal.style.display);
+        console.log('Classes:', loadingModal.className);
+        console.log('Aria hidden:', loadingModal.getAttribute('aria-hidden'));
+        console.log('Body modal-open:', document.body.classList.contains('modal-open'));
+        console.log('Backdrops:', document.querySelectorAll('.modal-backdrop').length);
+        console.log('Bootstrap instance:', bootstrap.Modal.getInstance(loadingModal));
+        console.log('========================');
+    } else {
+        console.log('Loading modal not found');
+    }
+}
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
@@ -284,12 +373,17 @@ async function loadProducts() {
         
         const productsData = await apiCall('/products');
         currentData.products = productsData.products;
+        filteredProducts = [...productsData.products]; // Initialize filtered products
         
         // Populate category filter
         populateCategoryFilter(productsData.products);
         
-        // Display products
-        displayProducts(productsData.products);
+        // Reset pagination
+        currentPage = 1;
+        totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+        
+        // Display products with pagination
+        displayProductsPaginated();
         
         hideElementLoading('products-list');
     } catch (error) {
@@ -330,14 +424,26 @@ function populateCategoryFilter(products) {
 }
 
 function displayProducts(products) {
+    // This function is kept for backward compatibility
+    // Use displayProductsPaginated() instead
+    displayProductsPaginated();
+}
+
+function displayProductsPaginated() {
     const container = document.getElementById('products-list');
     
-    if (products.length === 0) {
+    if (filteredProducts.length === 0) {
         container.innerHTML = '<p class="text-muted">No products found</p>';
         return;
     }
     
-    container.innerHTML = products.map(product => `
+    // Calculate pagination
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentProducts = filteredProducts.slice(startIndex, endIndex);
+    
+    // Display current page products
+    const productsHTML = currentProducts.map(product => `
         <div class="product-card" onclick="viewProductDetails('${product.product_id}')">
             <div class="row align-items-center">
                 <div class="col-md-4">
@@ -379,6 +485,175 @@ function displayProducts(products) {
             </div>
         </div>
     `).join('');
+    
+    // Add pagination controls
+    const paginationHTML = createPaginationControls();
+    
+    container.innerHTML = productsHTML + paginationHTML;
+}
+
+function createPaginationControls() {
+    if (totalPages <= 1) return '';
+    
+    const startItem = (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, filteredProducts.length);
+    
+    let paginationHTML = `
+        <div class="pagination-container mt-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="text-muted mb-0">
+                        Showing ${startItem} to ${endItem} of ${filteredProducts.length} products
+                    </p>
+                    ${getFilterSummary()}
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-end align-items-center">
+                        <div class="me-3">
+                            <label for="items-per-page" class="form-label mb-0 me-2">Items per page:</label>
+                            <select id="items-per-page" class="form-select form-select-sm d-inline-block" style="width: auto;" onchange="changeItemsPerPage()">
+                                <option value="5" ${itemsPerPage === 5 ? 'selected' : ''}>5</option>
+                                <option value="10" ${itemsPerPage === 10 ? 'selected' : ''}>10</option>
+                                <option value="20" ${itemsPerPage === 20 ? 'selected' : ''}>20</option>
+                                <option value="50" ${itemsPerPage === 50 ? 'selected' : ''}>50</option>
+                            </select>
+                        </div>
+                        <div class="me-3">
+                            <div class="input-group input-group-sm" style="width: 120px;">
+                                <input type="number" id="jump-to-page" class="form-control form-control-sm" placeholder="Page" min="1" max="${totalPages}" value="${currentPage}">
+                                <button class="btn btn-outline-primary btn-sm" type="button" onclick="jumpToPage()">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <nav aria-label="Products pagination">
+                            <ul class="pagination pagination-sm mb-0">
+    `;
+    
+    // Previous button
+    paginationHTML += `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'tabindex="-1"' : ''}>
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        </li>
+    `;
+    
+    // Page numbers
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        paginationHTML += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    // Next button
+    paginationHTML += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'tabindex="-1"' : ''}>
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        </li>
+    `;
+    
+    paginationHTML += `
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return paginationHTML;
+}
+
+// Pagination control functions
+function changePage(page) {
+    if (page < 1 || page > totalPages) return;
+    
+    currentPage = page;
+    displayProductsPaginated();
+    
+    // Scroll to top of products list
+    const productsList = document.getElementById('products-list');
+    if (productsList) {
+        productsList.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+function changeItemsPerPage() {
+    const select = document.getElementById('items-per-page');
+    if (select) {
+        itemsPerPage = parseInt(select.value);
+        currentPage = 1; // Reset to first page
+        totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+        displayProductsPaginated();
+    }
+}
+
+function goToFirstPage() {
+    changePage(1);
+}
+
+function goToLastPage() {
+    changePage(totalPages);
+}
+
+function jumpToPage() {
+    const input = document.getElementById('jump-to-page');
+    if (input) {
+        const page = parseInt(input.value);
+        if (page >= 1 && page <= totalPages) {
+            changePage(page);
+        } else {
+            showError(`Please enter a page number between 1 and ${totalPages}`);
+            input.value = currentPage;
+        }
+    }
+}
+
+function getFilterSummary() {
+    const searchTerm = document.getElementById('product-search')?.value || '';
+    const categoryFilter = document.getElementById('category-filter')?.value || '';
+    const sortBy = document.getElementById('sort-products')?.value || '';
+    
+    let summary = [];
+    
+    if (searchTerm) {
+        summary.push(`Search: "${searchTerm}"`);
+    }
+    
+    if (categoryFilter) {
+        summary.push(`Category: ${categoryFilter}`);
+    }
+    
+    if (sortBy) {
+        const sortLabels = {
+            'product_name': 'Name',
+            'category': 'Category',
+            'total_sales': 'Sales',
+            'total_revenue': 'Revenue',
+            'total_profit': 'Profit',
+            'profit_margin': 'Margin'
+        };
+        summary.push(`Sorted by: ${sortLabels[sortBy] || sortBy}`);
+    }
+    
+    if (summary.length > 0) {
+        return `<small class="text-info d-block mt-1"><i class="fas fa-filter me-1"></i>${summary.join(' • ')}</small>`;
+    }
+    
+    return '';
 }
 
 function filterProducts() {
@@ -417,7 +692,13 @@ function filterProducts() {
         }
     });
     
-    displayProducts(filtered);
+    // Update filtered products and reset pagination
+    filteredProducts = filtered;
+    currentPage = 1;
+    totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+    
+    // Display products with pagination
+    displayProductsPaginated();
 }
 
 // Predictions
@@ -766,9 +1047,21 @@ async function loadModelStatus() {
         
         if (status.trained && status.model_metrics) {
             displayModelMetrics(status.model_metrics);
-            displayFeatureImportance(status.feature_importance);
+            
+            // Debug: Check feature importance data
+            console.log('Status object:', status);
+            console.log('Feature importance exists:', !!status.feature_importance);
+            console.log('Feature importance data:', status.feature_importance);
+            
+            if (status.feature_importance) {
+                displayFeatureImportance(status.feature_importance);
+            } else {
+                console.log('No feature importance data in status');
+                document.getElementById('feature-importance').innerHTML = '<p class="text-muted">No feature importance data available</p>';
+            }
         } else {
             document.getElementById('model-metrics').innerHTML = '<p class="text-muted">No model metrics available</p>';
+            document.getElementById('feature-importance').innerHTML = '<p class="text-muted">Model not trained</p>';
         }
         
         hideElementLoading('model-metrics');
@@ -781,57 +1074,175 @@ async function loadModelStatus() {
 function displayModelMetrics(metrics) {
     const container = document.getElementById('model-metrics');
     
-    container.innerHTML = Object.entries(metrics).map(([modelName, metric]) => `
-        <div class="mb-4">
-            <h6>${modelName.toUpperCase()}</h6>
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <div class="h6 mb-0">${metric.mae.toFixed(3)}</div>
-                        <small class="text-muted">MAE</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <div class="h6 mb-0">${metric.rmse.toFixed(3)}</div>
-                        <small class="text-muted">RMSE</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <div class="h6 mb-0">${(metric.r2_score * 100).toFixed(1)}%</div>
-                        <small class="text-muted">R² Score</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <div class="h6 mb-0">${metric.mape.toFixed(1)}%</div>
-                        <small class="text-muted">MAPE</small>
+    // Calculate overall performance score
+    const overallScore = Object.values(metrics).reduce((acc, metric) => {
+        return acc + (metric.r2_score * 100);
+    }, 0) / Object.keys(metrics).length;
+    
+    // Performance level based on R² score
+    const getPerformanceLevel = (r2Score) => {
+        if (r2Score >= 0.9) return { level: 'Excellent', color: 'success', icon: 'fas fa-star' };
+        if (r2Score >= 0.8) return { level: 'Good', color: 'info', icon: 'fas fa-thumbs-up' };
+        if (r2Score >= 0.7) return { level: 'Fair', color: 'warning', icon: 'fas fa-check-circle' };
+        return { level: 'Poor', color: 'danger', icon: 'fas fa-exclamation-triangle' };
+    };
+    
+    // Get color for metric values
+    const getMetricColor = (metricName, value, r2Score) => {
+        if (metricName === 'r2_score') {
+            if (value >= 0.9) return 'text-success';
+            if (value >= 0.8) return 'text-info';
+            if (value >= 0.7) return 'text-warning';
+            return 'text-danger';
+        }
+        if (metricName === 'mae' || metricName === 'rmse' || metricName === 'mape') {
+            if (r2Score >= 0.8) return 'text-success';
+            if (r2Score >= 0.7) return 'text-warning';
+            return 'text-danger';
+        }
+        return 'text-muted';
+    };
+    
+    container.innerHTML = `
+        <!-- Overall Performance Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center py-4">
+                        <div class="display-4 text-primary mb-2">${overallScore.toFixed(1)}%</div>
+                        <h5 class="text-muted mb-3">Overall Model Performance</h5>
+                        <div class="d-flex justify-content-center align-items-center">
+                            <div class="progress me-3" style="width: 200px; height: 8px;">
+                                <div class="progress-bar bg-primary" style="width: ${overallScore}%"></div>
+                            </div>
+                            <span class="badge bg-${getPerformanceLevel(overallScore/100).color} fs-6">
+                                ${getPerformanceLevel(overallScore/100).level}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    `).join('');
+        
+        <!-- Individual Model Metrics -->
+        <div class="row">
+            ${Object.entries(metrics).map(([modelName, metric]) => {
+                const performance = getPerformanceLevel(metric.r2_score);
+                const trainingDate = new Date(metric.training_date).toLocaleDateString();
+                
+                return `
+                    <div class="col-12 mb-4">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-header bg-gradient-primary text-white border-0">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-brain me-2"></i>
+                                        ${modelName.charAt(0).toUpperCase() + modelName.slice(1)}
+                                    </h5>
+                                    <span class="badge bg-white text-primary fs-6">
+                                        <i class="${performance.icon} me-1"></i>
+                                        ${performance.level}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Performance Score -->
+                                <div class="text-center mb-4">
+                                    <div class="display-6 ${getMetricColor('r2_score', metric.r2_score, metric.r2_score)} mb-1">
+                                        ${(metric.r2_score * 100).toFixed(1)}%
+                                    </div>
+                                    <div class="text-muted">R² Score</div>
+                                    <div class="progress mt-2" style="height: 6px;">
+                                        <div class="progress-bar bg-${performance.color}" style="width: ${metric.r2_score * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Metrics Grid -->
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="metric-card text-center p-3 rounded bg-light">
+                                            <div class="h5 mb-1 ${getMetricColor('mae', metric.mae, metric.r2_score)}">
+                                                ${metric.mae.toFixed(3)}
+                                            </div>
+                                            <small class="text-muted">MAE</small>
+                                            <div class="small text-muted">Mean Absolute Error</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-card text-center p-3 rounded bg-light">
+                                            <div class="h5 mb-1 ${getMetricColor('rmse', metric.rmse, metric.r2_score)}">
+                                                ${metric.rmse.toFixed(3)}
+                                            </div>
+                                            <small class="text-muted">RMSE</small>
+                                            <div class="small text-muted">Root Mean Square Error</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-card text-center p-3 rounded bg-light">
+                                            <div class="h5 mb-1 ${getMetricColor('mape', metric.mape, metric.r2_score)}">
+                                                ${metric.mape.toFixed(1)}%
+                                            </div>
+                                            <small class="text-muted">MAPE</small>
+                                            <div class="small text-muted">Mean Absolute % Error</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-card text-center p-3 rounded bg-light">
+                                            <div class="h5 mb-1 text-info">
+                                                ${trainingDate}
+                                            </div>
+                                            <small class="text-muted">Trained</small>
+                                            <div class="small text-muted">Last Updated</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+        
+    `;
+    
+
 }
+
+
 
 async function trainModel() {
     try {
+        // Reset feature importance display flag when starting new training
+        resetFeatureImportanceDisplay();
+        
         showLoading('Training model...', 'This may take several minutes. The model will train in the background.');
+        
+        // Add a small delay to ensure the loading modal is visible
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         await apiCall('/train', { method: 'POST' });
         
         showSuccess('Model training started in background');
+        
+        // Close loading modal immediately after success
+        hideLoading();
         
         // Wait a bit and refresh status
         setTimeout(async () => {
             await loadModelStatus();
         }, 2000);
         
-        hideLoading();
     } catch (error) {
+        console.error('Training error:', error);
         hideLoading();
         showError('Failed to start model training');
     }
+    
+    // Additional fallback: ensure loading modal is hidden after a delay
+    setTimeout(() => {
+        console.log('Fallback: ensuring loading modal is hidden');
+        hideLoading();
+    }, 2000);
 }
 
 // Chart creation functions
@@ -1148,47 +1559,184 @@ function createMonthlyChart(dailyTrends) {
 }
 
 function displayFeatureImportance(featureImportance) {
-    if (!featureImportance || Object.keys(featureImportance).length === 0) {
-        document.getElementById('feature-importance').innerHTML = '<p class="text-muted">No feature importance data available</p>';
+    // Prevent duplicate execution
+    if (window.featureImportanceDisplayed) {
+        console.log('Feature importance already displayed, skipping...');
         return;
     }
     
-    // Use XGBoost importance for display
+    const container = document.getElementById('feature-importance');
+    if (!container) {
+        console.error('Feature importance container not found');
+        return;
+    }
+    
+    if (!featureImportance || Object.keys(featureImportance).length === 0) {
+        container.innerHTML = '<p class="text-muted">No feature importance data available</p>';
+        return;
+    }
+    
+    // Ensure canvas exists
+    let canvas = document.getElementById('feature-chart');
+    if (!canvas) {
+        container.innerHTML = '<canvas id="feature-chart" height="300"></canvas>';
+        canvas = document.getElementById('feature-chart');
+    }
+    
+    // Use XGBoost importance for display, sorted by importance
     const xgbImportance = featureImportance.xgboost || {};
-    const features = Object.keys(xgbImportance).slice(0, 10); // Top 10 features
-    const importance = features.map(f => xgbImportance[f]);
+    console.log('Processing feature importance with', Object.keys(xgbImportance).length, 'features');
+    
+    // Sort features by importance and take top 10
+    const sortedFeatures = Object.entries(xgbImportance)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10);
+    
+    const features = sortedFeatures.map(([feature, ]) => feature);
+    const importance = sortedFeatures.map(([, value]) => value);
+    
+    console.log('Creating chart with', features.length, 'features');
     
     const ctx = document.getElementById('feature-chart');
-    if (!ctx) return;
+    if (!ctx) {
+        console.error('Feature chart canvas not found after ensuring it exists');
+        return;
+    }
     
+
+    
+    // Destroy existing chart
     if (charts.feature) {
         charts.feature.destroy();
     }
     
+    // Create new chart with Chart.js 4.x syntax
     charts.feature = new Chart(ctx, {
-        type: 'horizontalBar',
+        type: 'bar',
         data: {
             labels: features,
             datasets: [{
-                label: 'Importance',
+                label: 'Feature Importance',
                 data: importance,
-                backgroundColor: '#3498db'
+                backgroundColor: 'rgba(52, 152, 219, 0.8)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 1
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             indexAxis: 'y',
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Top 10 Feature Importance (XGBoost)',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                }
+            },
             scales: {
                 x: {
                     beginAtZero: true,
                     title: {
                         display: true,
-                        text: 'Feature Importance'
+                        text: 'Importance Score'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(4);
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Features'
                     }
                 }
             }
         }
     });
+    
+    // Also display a summary table
+    const tableHtml = `
+        <div class="mt-3">
+            <h6>Feature Importance Summary</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Feature</th>
+                            <th>XGBoost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sortedFeatures.map(([feature, xgbValue], index) => {
+                            return `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td><code>${feature}</code></td>
+                                    <td>${xgbValue.toFixed(6)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    // Add the table below the chart
+    const chartContainer = ctx.parentElement;
+    
+    // Remove any existing feature importance tables (more specific selector)
+    const existingTables = chartContainer.parentElement.querySelectorAll('.feature-importance-table');
+    existingTables.forEach(table => table.remove());
+    
+    // Add the table below the chart with a specific class
+    const tableHtmlWithClass = `
+        <div class="mt-3 feature-importance-table">
+            <h6>Feature Importance Summary</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Feature</th>
+                            <th>XGBoost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sortedFeatures.map(([feature, xgbValue], index) => {
+                            return `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td><code>${feature}</code></td>
+                                    <td>${xgbValue.toFixed(6)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    chartContainer.parentElement.insertAdjacentHTML('afterend', tableHtmlWithClass);
+    
+    // Mark as displayed to prevent duplicates
+    window.featureImportanceDisplayed = true;
+}
+
+// Reset feature importance display flag
+function resetFeatureImportanceDisplay() {
+    window.featureImportanceDisplayed = false;
 }
 
 // Utility functions
@@ -1254,35 +1802,16 @@ function showLoading(text = 'Loading...', details = 'Please wait while we proces
 }
 
 function hideLoading() {
+    console.log('hideLoading called');
+    
     // Clear any pending timeout
     if (loadingTimeoutId) {
         clearTimeout(loadingTimeoutId);
         loadingTimeoutId = null;
     }
     
-    // Force hide loading modal - multiple attempts to handle stuck modals
-    const loadingModal = document.getElementById('loadingModal');
-    if (loadingModal) {
-        const modal = bootstrap.Modal.getInstance(loadingModal);
-        if (modal) {
-            modal.hide();
-        }
-        
-        // Force remove backdrop and modal classes if still showing
-        setTimeout(() => {
-            loadingModal.classList.remove('show');
-            loadingModal.style.display = 'none';
-            
-            // Remove any leftover backdrops
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
-            
-            // Remove modal-open class from body
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-        }, 100);
-    }
+    // Call the force close function
+    forceCloseLoading();
 }
 
 function showElementLoading(elementId) {

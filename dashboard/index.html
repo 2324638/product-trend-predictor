@@ -136,6 +136,111 @@
             padding: 10px 25px;
             transition: all 0.3s ease;
         }
+        
+        /* Enhanced Model Metrics Styling */
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, var(--primary-color), #2980b9) !important;
+        }
+        
+        .metric-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: var(--primary-color);
+        }
+        
+        .card {
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+        }
+        
+        .progress {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            border-radius: 10px;
+        }
+        
+        .badge {
+            font-weight: 500;
+            padding: 0.5em 1em;
+        }
+        
+        .display-4, .display-6 {
+            font-weight: 700;
+        }
+        
+        .bg-light {
+            background-color: #f8f9fa !important;
+        }
+        
+        /* Pagination Styling */
+        .pagination-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .pagination .page-link {
+            color: var(--primary-color);
+            border: 1px solid #dee2e6;
+            margin: 0 2px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination .page-link:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        .pagination .page-item.active .page-link {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        
+        .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            background-color: #f8f9fa;
+            border-color: #dee2e6;
+        }
+        
+        .form-select-sm {
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            transition: all 0.3s ease;
+        }
+        
+        .form-select-sm:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        
+        .input-group-sm .form-control {
+            border-radius: 6px 0 0 6px;
+        }
+        
+        .input-group-sm .btn {
+            border-radius: 0 6px 6px 0;
+        }
+        
+        .text-info {
+            color: var(--primary-color) !important;
+        }
 
         .btn-primary:hover {
             transform: translateY(-2px);
@@ -269,7 +374,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" onclick="showTab('predictions')">
-                            <i class="fas fa-crystal-ball me-2"></i>Predictions
+                            <i class="fas fa-magic me-2"></i>Predictions
                         </a>
                     </li>
                     <li class="nav-item">
@@ -530,7 +635,7 @@
                     </h2>
 
                     <div class="row">
-                        <div class="col-md-6">
+                        <!-- <div class="col-md-6">
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title">Upload Data</h5>
@@ -546,8 +651,8 @@
                                     </form>
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-md-6">
+                        </div> -->
+                        <div class="col-md-12">
                             <div class="card">
                                 <div class="card-body">
                                     <h5 class="card-title">Superstore Dataset</h5>

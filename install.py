@@ -80,9 +80,9 @@ def check_optional_dependencies():
     print("\n🔧 Checking optional dependencies...")
     
     optional_packages = {
-        "tensorflow": "TensorFlow (for LSTM models)",
+
         "xgboost": "XGBoost (for gradient boosting)",
-        "lightgbm": "LightGBM (for fast gradient boosting)",
+
         "plotly": "Plotly (for interactive charts)",
         "fastapi": "FastAPI (for web API)",
         "uvicorn": "Uvicorn (for web server)"
@@ -186,7 +186,7 @@ def print_completion_message():
     print("=" * 70)
     print()
     print("📋 What's installed:")
-    print("   • AI trend prediction models (LSTM, XGBoost, LightGBM)")
+            print("   • AI trend prediction models (XGBoost)")
     print("   • Interactive web dashboard")
     print("   • REST API for integration")
     print("   • Data management tools")
